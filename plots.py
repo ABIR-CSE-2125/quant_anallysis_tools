@@ -3,7 +3,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 import matplotlib.ticker as mticker
-
+import glob
 
 
 ########################################################################################################################################################
@@ -92,4 +92,81 @@ def weekday_wise_aggregation_plot(daily_pnl,metric,title):
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(format_k))  # Format y-axis in 'K'
 
     # Show the plot
+    plt.show()
+
+
+
+def comparative_pnl_plot(backtest_path_1, backtest_path_2, strategy_name_1, strategy_name_2):
+    """
+    Plots a dual-axis line graph comparing the 'portfolio_value' column from two backtests.
+
+    Parameters:
+        backtest_path_1 (str): Path to the first backtest directory.
+        backtest_path_2 (str): Path to the second backtest directory.
+        strategy_name_1 (str): Name of First Strategy
+        strategy_name_2 (str): Name of Second Startegy
+    Raises:
+        ValueError: If 'portfolio_value' is not found in either DataFrame.
+    """
+
+    # Load and process first dataset
+    df1_files = glob.glob(f"{backtest_path_1}/consolidated_store/*.csv")
+    df1_list = [pd.read_csv(file) for file in df1_files]
+    df1 = pd.concat(df1_list, ignore_index=True)
+    df1 = df1[df1['trade_done'] == True]
+    df1['Timestamp'] = pd.to_datetime(df1['timestamp'])
+    df1 = df1.set_index("Timestamp").sort_index()
+    df1_daily = df1.resample('D').last().dropna()
+
+    # Load and process second dataset
+    df2_files = glob.glob(f"{backtest_path_2}/consolidated_store/*.csv")
+    df2_list = [pd.read_csv(file) for file in df2_files]
+    df2 = pd.concat(df2_list, ignore_index=True)
+    df2 = df2[df2['trade_done'] == True]
+    df2['Timestamp'] = pd.to_datetime(df2['timestamp']) 
+    df2 = df2.set_index("Timestamp").sort_index()
+    df2_daily = df2.resample('D').last().dropna()
+
+    # Validate column existence
+    if "portfolio_value" not in df1_daily.columns:
+        raise ValueError("Column 'portfolio_value' not found in first dataset.")
+    if "portfolio_value" not in df2_daily.columns:
+        raise ValueError("Column 'portfolio_value' not found in second dataset.")
+
+    # Plotting
+    fig, ax1 = plt.subplots(figsize=(16, 7))
+
+    # Primary Y-axis (df1)
+    ax1.plot(df1_daily.index, df1_daily["portfolio_value"], label=f"Portfolio Value {strategy_name_1}", color='#64B5F6')
+    ax1.set_ylabel(f"Portfolio Value {strategy_name_1}", color='black')
+    ax1.tick_params(axis='y', labelcolor='black')
+
+    # Secondary Y-axis (df2)
+    ax2 = ax1.twinx()
+    ax2.plot(df2_daily.index, df2_daily["portfolio_value"], label=f"Portfolio Value {strategy_name_2}", color='#4CAF50')
+    ax2.set_ylabel(f"Portfolio Value {strategy_name_2}", color='black')
+    ax2.tick_params(axis='y', labelcolor='black')
+
+    # Number formatting function
+    def format_number(value, _):
+        if 1_000 <= abs(value) < 1_000_000:
+            return f"{value / 1_000:.1f}K"
+        elif abs(value) >= 1_000_000:
+            return f"{value / 1_000_000:.1f}M"
+        return str(int(value))  # Convert to int for cleaner display
+
+    # Apply formatting to y-ticks
+    ax1.yaxis.set_major_formatter(plt.FuncFormatter(format_number))
+    ax2.yaxis.set_major_formatter(plt.FuncFormatter(format_number))
+
+    # Labels and title
+    ax1.set_xlabel("Date")
+    plt.title(f'Comparison : {strategy_name_1} vs {strategy_name_2}')
+
+    # Show grid and legend
+    ax1.grid(True, linestyle="--", alpha=0.6)
+    ax1.legend(loc="upper left")
+    ax2.legend(loc="upper right")
+
+    fig.tight_layout()
     plt.show()
